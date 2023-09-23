@@ -6,30 +6,33 @@ namespace AlexKassel\Contracts\Traits;
 
 trait Invokable
 {
-    public function __invoke(?string $method = null, ?array $arguments = null): mixed
+    protected string $defaultMethod = 'handle';
+    protected bool $globalsInsteadOfEmptyInvokeArgs = false;
+
+    public function __invoke(?string $method = null, ?array $args = null): mixed
     {
-        return $this->__call($method ?? 'handle', $arguments ?? $_REQUEST);
+        return $this->callMethod(
+            $method ?? $this->defaultMethod,
+            $args ?? $this->globalsInsteadOfEmptyInvokeArgs ? [...$_GET, ...$_POST] : []
+        );
     }
 
-    public function __call(string $name, array $arguments): mixed
+    public static function __callStatic(string $method, array $args): mixed
+    {
+        return (new static())->callMethod($method, $args);
+    }
+
+    public function callMethod(string $method, array $args): mixed
     {
         $reflectionClass = new \ReflectionClass($this);
-        if ($reflectionMethod = $reflectionClass->getMethod($name)) {
+        if ($reflectionMethod = $reflectionClass->getMethod($method)) {
             if (! $reflectionMethod->isPrivate()) {
-                return $this->$name(...$arguments);
+                return $this->{$method}(...$args);
             }
         }
 
-        throw new \InvalidArgumentException(sprintf('Method %s::%s() does not exist', __CLASS__, $name));
-    }
-
-    public static function __callStatic(string $name, array $arguments): mixed
-    {
-        return (new static())($name, $arguments ?: null);
-    }
-
-    protected function handle(...$arguments): mixed
-    {
-        throw new \InvalidArgumentException(sprintf('Default Method handle() is not defined in %s', __CLASS__));
+        throw new \BadMethodCallException(sprintf(
+            'Method %s::%s does not exist.', static::class, $method
+        ));
     }
 }
